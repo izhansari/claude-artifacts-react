@@ -2327,7 +2327,7 @@ async function fetchShopifyOrders() {
 
 function mapShopifyOrders(rawOrders) {
   // Reuse same shape as parseShopifyCSV output
-  return rawOrders.map(o => {
+  const mapped = rawOrders.map(o => {
     const name = [o.shipping_address?.first_name, o.shipping_address?.last_name].filter(Boolean).join(" ")
       || o.billing_address?.name || o.email || "Unknown";
     const city  = o.shipping_address?.city  || "";
@@ -2343,9 +2343,12 @@ function mapShopifyOrders(rawOrders) {
       city, province: prov,
       items,
       notes:  o.note || "",
-      status: "skip", // recalculated by runFulfillment
+      status: "skip",
     };
   }).filter(o => o.items.length > 0);
+
+  // Sort ascending by order number (oldest first) — same as CSV
+  return mapped.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 }
 
 export default function App() {
@@ -2422,7 +2425,11 @@ export default function App() {
     return stock;
   }, [inventory, orders, doneIds]);
 
-  const pendingOrders = useMemo(() => orders.filter(o => !doneIds.has(o.id)), [orders, doneIds]);
+  const pendingOrders = useMemo(() => 
+    orders
+      .filter(o => !doneIds.has(o.id))
+      .sort((a,b) => a.id.localeCompare(b.id, undefined, {numeric:true})),
+    [orders, doneIds]);
   const doneOrders    = useMemo(() => orders.filter(o =>  doneIds.has(o.id)), [orders, doneIds]);
 
   const {fulfilled,partial,unfulfillable,remainingStock} = useMemo(
@@ -2465,7 +2472,7 @@ export default function App() {
 
   return (
     <TooltipLayer>
-    <div style={{minHeight:"100vh",background:"#F7F6F3",fontFamily:"'DM Sans',sans-serif"}}>
+    <div id="sahara-root" style={{minHeight:"100vh",background:"#F7F6F3",fontFamily:"'DM Sans',sans-serif"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap');
         @keyframes fadeSlide{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
@@ -2473,8 +2480,10 @@ export default function App() {
         input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
         input[type=number]{-moz-appearance:textfield;}
         .fc:hover{transform:translateY(-1px);transition:transform 0.12s;}
+        #sahara-root, #sahara-root * { text-align: left; font-family: 'DM Sans', sans-serif; line-height: normal; }
+        #sahara-root button { font-family: inherit; }
+        #sahara-root input { font-family: inherit; text-align: inherit; }
       `}</style>
-
       {/* Header */}
       <div style={{background:"#1C1917",borderBottom:"3px solid #C9A84C",padding:"18px 28px"}}>
         <div style={{maxWidth:"980px",margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"12px"}}>
