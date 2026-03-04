@@ -2358,6 +2358,7 @@ export default function App() {
   const [shopifyLoading, setShopifyLoading] = useState(false);
   const [shopifyError,   setShopifyError]   = useState("");
   const [dataSource, setDataSource]         = useState(""); // "shopify" | "csv"
+  const [fetchedAt, setFetchedAt]           = useState(null); // Date object
   const [csvError, setCsvError]     = useState("");
   const [csvFilename, setCsvFilename] = useState("");
   const [tab, setTab]               = useState("orders");
@@ -2382,7 +2383,7 @@ export default function App() {
       try {
         const parsed = parseShopifyCSV(e.target.result);
         if(!parsed.length){setCsvError("No unfulfilled paid orders found.");return;}
-        setOrders(parsed);setCsvLoaded(true);setCsvFilename(file.name);setTab("orders");setClauses([]);setDoneIds(new Set());setDataSource("csv");
+        setOrders(parsed);setCsvLoaded(true);setCsvFilename(file.name);setTab("orders");setClauses([]);setDoneIds(new Set());setDataSource("csv");setFetchedAt(new Date());
       } catch { setCsvError("Could not parse CSV — use a Shopify orders export."); }
     };
     reader.readAsText(file);
@@ -2397,7 +2398,8 @@ export default function App() {
       if (!mapped.length) { setShopifyError("No open paid orders found in your store."); setShopifyLoading(false); return; }
       setOrders(mapped);
       setCsvLoaded(true);
-      setCsvFilename(`Shopify Live · ${new Date().toLocaleDateString()}`);
+      setCsvFilename(`Shopify Live`);
+      setFetchedAt(new Date());
       setTab("orders");
       setClauses([]);
       setDoneIds(new Set());
@@ -2491,11 +2493,16 @@ export default function App() {
             <div style={{display:"flex",alignItems:"center",gap:"9px",marginBottom:"3px"}}>
               <span style={{fontSize:"18px"}}>🌴</span>
               <h1 style={{color:"#F5EFE3",margin:0,fontSize:"17px",fontWeight:700,letterSpacing:"-0.02em"}}>Sahara Delights — Fulfillment</h1>
+              <span style={{fontSize:"10px",fontWeight:600,color:"#78716C",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"5px",padding:"2px 7px",letterSpacing:"0.04em"}}>v8</span>
             </div>
             <p style={{color:"#78716C",margin:0,fontSize:"11px"}}>
-              {csvLoaded
-                ? `${dataSource==="shopify"?"🟢 Shopify Live":"📄 CSV"} · ${csvFilename} · ${orders.length} unfulfilled orders`
-                : "Load orders from Shopify or upload a CSV"}
+              {csvLoaded ? (
+                <>
+                  <span>{dataSource==="shopify" ? "🟢 Shopify Live" : `📄 ${csvFilename}`}</span>
+                  {fetchedAt && <span> · {fetchedAt.toLocaleDateString()} {fetchedAt.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</span>}
+                  <span> · {orders.length} unfulfilled orders</span>
+                </>
+              ) : "Load orders from Shopify or upload a CSV"}
             </p>
           </div>
           <div style={{display:"flex",gap:"6px"}}>
