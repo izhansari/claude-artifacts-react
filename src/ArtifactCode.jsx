@@ -571,13 +571,29 @@ function TooltipLayer({ children }) {
   );
 }
 
-function SkuBadge({sku, qty, strikethrough=false, info=null}) {
+function SkuBadge({sku, qty, strikethrough=false, holdStrikethrough=false, info=null}) {
   const setTip = useContext(TooltipContext);
   const col = getCol(sku);
   const isReg   = sku.includes("-R-");
   const isGrand = sku.includes("-L-");
   const sizeLabel = isReg ? "Reg" : isGrand ? "Grand" : null;
   const name = SKU_MAP[sku]||sku;
+
+  // strikethrough = missing from partial order (red bg, red text)
+  // holdStrikethrough = on-hold order item (keep collection color, red border)
+  const style = strikethrough ? {
+    background: "#FEE2E2", color: "#991B1B",
+    border: "1px solid #FCA5A5",
+    textDecoration: "line-through", opacity: 0.65,
+  } : holdStrikethrough ? {
+    background: col.muted, color: col.text,
+    border: `2px solid #EF4444`,
+    textDecoration: "line-through", opacity: 0.75,
+  } : {
+    background: col.muted, color: col.text,
+    border: `1px solid ${col.border}`,
+    textDecoration: "none", opacity: 1,
+  };
 
   return (
     <span
@@ -586,14 +602,12 @@ function SkuBadge({sku, qty, strikethrough=false, info=null}) {
       onMouseLeave={() => setTip && setTip(null)}
       style={{
         display:"inline-flex", alignItems:"center", gap:"4px",
-        background: strikethrough?"#FEE2E2":col.muted, color: strikethrough?"#991B1B":col.text,
-        border:`1px solid ${strikethrough?"#FCA5A5":col.border}`,
         borderRadius:"4px", padding:"2px 8px", fontSize:"11px", fontWeight:600,
         fontFamily:"'DM Mono',monospace", whiteSpace:"nowrap",
-        textDecoration: strikethrough?"line-through":"none", opacity: strikethrough?0.65:1,
         cursor:"default",
+        ...style,
       }}>
-      {qty>1&&<span style={{background:strikethrough?"#EF4444":col.accent,color:"#fff",borderRadius:"3px",padding:"0 4px",fontSize:"10px",marginRight:"1px"}}>×{qty}</span>}
+      {qty>1&&<span style={{background: strikethrough?"#EF4444":col.accent, color:"#fff", borderRadius:"3px", padding:"0 4px", fontSize:"10px", marginRight:"1px"}}>×{qty}</span>}
       {name}
       {sizeLabel && <span style={{fontSize:"9px",opacity:0.7,marginLeft:"1px"}}>{sizeLabel}</span>}
     </span>
@@ -637,15 +651,12 @@ function OrderCard({order, index, onMarkDone, isDone=false, skuInfo={}}) {
       </div>
       <div style={{marginTop:"7px",display:"flex",flexWrap:"wrap",gap:"5px"}}>
         {order.status==="partial" && !isDone
-          ? <>{order.partialItems.map(it=><SkuBadge key={it.sku} sku={it.sku} qty={it.qty} info={skuInfo[it.sku]}/>)}{order.missingItems.map(it=><SkuBadge key={it.sku} sku={it.sku} qty={it.qty} strikethrough info={skuInfo[it.sku]}/>)}</>
-          : order.items.map(it=><SkuBadge key={it.sku} sku={it.sku} qty={it.qty} info={skuInfo[it.sku]}/>)
+          ? <>{order.partialItems.map(it=><SkuBadge key={it.sku} sku={it.sku} qty={it.qty} info={skuInfo[it.sku]}/>)}{order.missingItems.map(it=><SkuBadge key={it.sku} sku={it.sku} qty={it.qty} holdStrikethrough info={skuInfo[it.sku]}/>)}</>
+          : order.status==="skip" && !isDone
+            ? order.items.map(it=><SkuBadge key={it.sku} sku={it.sku} qty={it.qty} holdStrikethrough info={skuInfo[it.sku]}/>)
+            : order.items.map(it=><SkuBadge key={it.sku} sku={it.sku} qty={it.qty} info={skuInfo[it.sku]}/>)
         }
       </div>
-      {!isDone&&(order.status==="partial"||order.status==="skip")&&(
-        <div style={{marginTop:"5px",fontSize:"11px",color:order.status==="partial"?"#D97706":"#DC2626",fontStyle:"italic"}}>
-          Need: {(order.missingItems||[]).map(i=>{const sz=i.sku.includes("-R-")?" Reg":i.sku.includes("-L-")?" Grand":"";return`${SKU_MAP[i.sku]||i.sku}${sz} (have ${i.have}, need ${i.needed||i.qty})`;}).join(" · ")}
-        </div>
-      )}
       {order.notes&&order.notes.trim()&&(
         <div style={{marginTop:"5px",fontSize:"11px",color:"#7C3AED",background:"#F5F3FF",borderRadius:"4px",padding:"3px 8px",display:"inline-block"}}>
           📝 {order.notes.trim()}
@@ -857,7 +868,7 @@ function BoxesTab({orders, rules, onRulesChange}) {
 
   if (!orders.length) {
     return (
-      <div style={{textAlign:"center",color:"#A8A29E",padding:"60px 24px",fontSize:"14px"}}>
+      <div style={{color:"#A8A29E",padding:"60px 24px",fontSize:"14px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
         <div style={{fontSize:"32px",marginBottom:"10px"}}>📦</div>
         Upload a CSV in the Orders tab first, then come back here.
       </div>
@@ -1200,7 +1211,7 @@ function PrepPlanTab({ orders, inventory, csvLoaded, csvFilename, datesReg, setD
 
   if (!csvLoaded) {
     return (
-      <div style={{textAlign:"center",color:"#A8A29E",padding:"60px 24px"}}>
+      <div style={{color:"#A8A29E",padding:"60px 24px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",textAlign:"center"}}>
         <div style={{fontSize:"32px",marginBottom:"10px"}}>📋</div>
         Upload a CSV in the Orders tab first.
       </div>
@@ -2359,12 +2370,13 @@ export default function App() {
   const [shopifyError,   setShopifyError]   = useState("");
   const [dataSource, setDataSource]         = useState(""); // "shopify" | "csv"
   const [fetchedAt, setFetchedAt]           = useState(null); // Date object
+  const [showChangelog, setShowChangelog]   = useState(false);
   const [csvError, setCsvError]     = useState("");
   const [csvFilename, setCsvFilename] = useState("");
   const [tab, setTab]               = useState("orders");
   const [dragOver, setDragOver]     = useState(false);
   const [datesReg, setDatesReg]     = useState(DATES_PER_BOX.reg);
-  const [weights, setWeights]       = useState({ reg:["2.6","3.6",""], grand:["3.6","5.6",""] });
+  const [weights, setWeights]       = useState({ reg:["2.6","3.6","5.6"], grand:["3.6","5.6",""] });
   const [datesGrand, setDatesGrand] = useState(DATES_PER_BOX.grand);
   const [boxRules, setBoxRules]     = useState(DEFAULT_BOX_RULES);
   const fileRef = useRef();
@@ -2495,7 +2507,7 @@ export default function App() {
             <div style={{display:"flex",alignItems:"center",gap:"9px",marginBottom:"3px"}}>
               <span style={{fontSize:"18px"}}>🌴</span>
               <h1 style={{color:"#F5EFE3",margin:0,fontSize:"17px",fontWeight:700,letterSpacing:"-0.02em"}}>Sahara Delights — Fulfillment</h1>
-              <span style={{fontSize:"10px",fontWeight:600,color:"#78716C",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"5px",padding:"2px 7px",letterSpacing:"0.04em"}}>v8</span>
+              <span onClick={()=>setShowChangelog(true)} style={{fontSize:"10px",fontWeight:600,color:"#78716C",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:"5px",padding:"2px 7px",letterSpacing:"0.04em",cursor:"pointer",userSelect:"none"}} title="View changelog">v8</span>
             </div>
             <p style={{color:"#78716C",margin:0,fontSize:"11px"}}>
               {csvLoaded ? (
@@ -2792,6 +2804,47 @@ export default function App() {
         )}
         {tab==="weights"&&<WeightsTab weights={weights} setWeights={setWeights}/>}
       </div>
+
+      {/* ── Changelog Modal ── */}
+      {showChangelog && (
+        <div onClick={()=>setShowChangelog(false)} style={{
+          position:"fixed", inset:0, background:"rgba(0,0,0,0.55)",
+          zIndex:99999, display:"flex", alignItems:"center", justifyContent:"center",
+        }}>
+          <div onClick={e=>e.stopPropagation()} style={{
+            background:"#1C1917", border:"1px solid #3D3530",
+            borderRadius:"14px", padding:"28px 32px", maxWidth:"480px", width:"90%",
+            boxShadow:"0 20px 60px rgba(0,0,0,0.6)", fontFamily:"'DM Sans',sans-serif",
+          }}>
+            <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:"20px"}}>
+              <div>
+                <span style={{fontSize:"15px", fontWeight:700, color:"#F5EFE3"}}>Sahara Fulfillment</span>
+                <span style={{marginLeft:"8px", fontSize:"11px", fontWeight:600, color:"#78716C", background:"rgba(255,255,255,0.07)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:"5px", padding:"2px 7px"}}>v8</span>
+              </div>
+              <button onClick={()=>setShowChangelog(false)} style={{background:"none", border:"none", color:"#78716C", fontSize:"18px", cursor:"pointer", lineHeight:1}}>✕</button>
+            </div>
+            <div style={{display:"flex", flexDirection:"column", gap:"10px"}}>
+              {[
+                { label:"Styling & badge fixes", note:"Removed 'Short by' from tooltip. Missing items in both partial and hold orders now show red border + strikethrough while keeping their collection color." },
+                { label:"On-hold strikethrough", note:"Hold order items get strikethrough with red border instead of turning fully red — collection color stays visible so you can still identify product type at a glance." },
+                { label:"Need lines removed", note:"Removed the italic 'Need: ...' lines from order cards. That info now lives in the hover tooltip on each badge (Inv boxes / Make boxes)." },
+                { label:"Shopify live orders", note:"Added direct Shopify API fetch via Vercel serverless proxy. Orders load live with a Refresh button. CSV upload kept as fallback. Header shows source + fetch timestamp." },
+                { label:"Quick view weights", note:"Weight values from the Weights tab now appear on Solo Reg / Duo Reg / Solo Grand / Duo Grand filter buttons. Updating the Weights tab reflects instantly on the buttons." },
+              ].map((item, i) => (
+                <div key={i} style={{
+                  background:"rgba(255,255,255,0.04)", borderRadius:"8px",
+                  padding:"10px 14px", borderLeft:"3px solid #C9A84C",
+                }}>
+                  <div style={{fontSize:"12px", fontWeight:700, color:"#C9A84C", marginBottom:"3px"}}>{item.label}</div>
+                  <div style={{fontSize:"11px", color:"#A8A29E", lineHeight:"1.5"}}>{item.note}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{marginTop:"18px", fontSize:"10px", color:"#57534E", textAlign:"center"}}>Click outside to close</div>
+          </div>
+        </div>
+      )}
+
     </div>
     </TooltipLayer>
   );
